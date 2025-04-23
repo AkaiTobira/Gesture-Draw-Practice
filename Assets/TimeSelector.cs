@@ -14,9 +14,17 @@ static class Settings{
 
     public static string ImagePath = Directory.GetCurrentDirectory() + "/Images";
     public static string PredefPaths = Directory.GetCurrentDirectory() + "/Optimized";
+    public static string MinisPaths = Directory.GetCurrentDirectory() + "/Optimized/Minis";
 
     public static string[] ImagesList = null;
     public static string[] PredefList = null;
+    public static string[] MinisList  = null;
+
+    public static HashSet<string> ImagesSet = new HashSet<string>();
+    public static HashSet<string> PredefSet = new HashSet<string>();
+    public static HashSet<string> MinisSet = new HashSet<string>();
+
+    
 
     public static Dictionary<string, string> bindedPaths = null;
 

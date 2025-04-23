@@ -23,7 +23,6 @@
              }
 
             private void Update() {
-                Debug.Log("SPAM");
                 if(Input.GetKeyDown(KeyCode.Tilde)){ display = !display; }    
             }
 

@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
+using UnityEngine.Networking;
 
 public class ImageParser : MonoBehaviour
 {
@@ -14,6 +15,7 @@ public class ImageParser : MonoBehaviour
             
             if(!Directory.Exists(Settings.ImagePath))  {Directory.CreateDirectory(Settings.ImagePath);}
             if(!Directory.Exists(Settings.PredefPaths)){Directory.CreateDirectory(Settings.PredefPaths);}
+            if(!Directory.Exists(Settings.MinisPaths)) {Directory.CreateDirectory(Settings.MinisPaths);}
 
             Settings.bindedPaths = new Dictionary<string, string>();
             MapImages();
@@ -43,28 +45,28 @@ public class ImageParser : MonoBehaviour
     private void MapImages(){
         Settings.PredefList = Directory.GetFiles(Settings.PredefPaths);
         Settings.ImagesList = Directory.GetFiles(Settings.ImagePath);
+        Settings.MinisList  = Directory.GetFiles(Settings.MinisPaths);
 
-        if(_toProcess.Count > 0) return;
+        if(_toProcess.Count > 0 || Settings.ImagesList.Length == Settings.ImagesSet.Count ) return;
 
-        for(int j = 0; j < Settings.ImagesList.Length; j++) {
-            string fileName = GetFileName(Settings.ImagesList[j]);
+        for(int i = 0; i < Settings.PredefList.Length; i++) Settings.PredefSet.Add(Settings.PredefList[i]);
+        for(int i = 0; i < Settings.ImagesList.Length; i++) Settings.ImagesSet.Add(Settings.ImagesList[i]);
 
-            if(Settings.bindedPaths.ContainsKey(fileName)) continue;
+        foreach(string str in Settings.ImagesSet)
+        {
+            string fileName = GetFileName(str);
             if(fileName.Contains(".meta")) continue;
+            if(Settings.bindedPaths.ContainsKey(fileName)) continue;
 
-            bool found = false;
-            for(int i = 0; i < Settings.PredefList.Length; i++) {
-                string fileName2 = GetFileName(Settings.PredefList[i]);
-                if(fileName2.Contains(".meta")) continue;
-
-                if(fileName == fileName2){
-                    found = true;
-                    Settings.bindedPaths[Settings.ImagesList[j]] = Settings.PredefList[i];
-                    break;
-                }
+            string replaced = str.Replace("Images", "Optimized");
+            if(Settings.PredefSet.Contains(replaced))
+            {
+                Settings.bindedPaths[str] = replaced;
             }
-
-            if(!found) _toProcess.Add(Settings.ImagesList[j]);
+            else
+            {
+                _toProcess.Add(str);
+            }
         }
 
         Debug.Log("Mapped images :" + Settings.bindedPaths.Count);
@@ -86,30 +88,55 @@ public class ImageParser : MonoBehaviour
             timer -= Time.deltaTime;
             if(timer < 0){
                 MapImages();
-                timer = 5;
+                timer = 5f;
             }
         }
     }
+
 
     IEnumerator OptimizeTexture(){
         loadingTexture = true;
         _textureToParse = new Texture2D(4, 4, TextureFormat.RGB24, false);
 
-        WWW www = new WWW("file://" + _toProcess[0]);    
-        yield return www;
-        www.LoadImageIntoTexture(_textureToParse);
-        Debug.Log("Loaded file://" + _toProcess[0]);
+        using (UnityWebRequest loader = UnityWebRequestTexture.GetTexture("file://" + _toProcess[0]))
+        {
+            yield return loader.SendWebRequest();
+ 
+            if (string.IsNullOrEmpty(loader.error))
+            {
+                _textureToParse = DownloadHandlerTexture.GetContent(loader);
+                Debug.Log("Loaded file://" + _toProcess[0]);
+            }
+            else
+            {
+                Debug.LogError("Couldn't load file://" + _toProcess[0]);
+        //        this.LogErrorFormat("Error loading Texture '{0}': {1}", loader.uri, loader.error);
+            }
+        }
+
+    //    WWW www = new WWW("file://" + _toProcess[0]);    
+    //    yield return www;
+    //    www.LoadImageIntoTexture(_textureToParse);
+    //    Debug.Log("Loaded file://" + _toProcess[0]);
 
         int textureBiggerSize = _textureToParse.height;
         float scale = _textureToParse.height / 1024f;
-
+        float scaleMinis = _textureToParse.height / 128f;
 
         Texture2D newScreenshot = ScaleTexture(
+            _textureToParse, 
+            (int)(_textureToParse.width/scaleMinis), 
+            (int)(_textureToParse.height/scaleMinis));
+
+        byte[] bytes = newScreenshot.EncodeToPNG();
+        File.WriteAllBytes(Settings.MinisPaths + "\\mini_" + GetFileName(_toProcess[0]), bytes);
+
+        newScreenshot = ScaleTexture(
             _textureToParse, 
             (int)(_textureToParse.width/scale), 
             (int)(_textureToParse.height/scale));
 
-        byte[] bytes = newScreenshot.EncodeToPNG();
+        bytes = newScreenshot.EncodeToPNG();
         File.WriteAllBytes(Settings.PredefPaths + "\\" + GetFileName(_toProcess[0]), bytes);
         
         loadingTexture = false;
@@ -117,6 +144,8 @@ public class ImageParser : MonoBehaviour
         _textureToParse = null;
 
         if(_toProcess.Count == 0) MapImages();
+
+        Resources.UnloadUnusedAssets();
     }
     private Texture2D ScaleTexture(Texture2D source,int targetWidth,int targetHeight) {
         Texture2D result = new Texture2D(targetWidth,targetHeight,source.format,true);

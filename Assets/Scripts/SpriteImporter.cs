@@ -123,11 +123,21 @@ public class SpriteImporter : MonoBehaviour {
             }
         */
 
-        WWW www = new WWW("file://" + picture);    
-        yield return www;
-        www.LoadImageIntoTexture(tex);
-        Debug.Log("Loaded file://" + picture);
-
+        using (UnityWebRequest loader = UnityWebRequestTexture.GetTexture("file://" + picture))
+        {
+            yield return loader.SendWebRequest();
+ 
+            if (string.IsNullOrEmpty(loader.error))
+            {
+                tex = DownloadHandlerTexture.GetContent(loader);
+                Debug.Log("Loaded file://" + picture);
+            }
+            else
+            {
+                Debug.LogError("Couldn't load file://" + picture);
+        //        this.LogErrorFormat("Error loading Texture '{0}': {1}", loader.uri, loader.error);
+            }
+        }
         Settings._textureCache.Add(tex);
 
         MainScreen.texture = tex;
